@@ -17,7 +17,7 @@
 --
 
 require 'TTransport'
-require 'libluasocket'
+require 'socket'
 
 -- TSocketBase
 TSocketBase = TTransportBase:new{
