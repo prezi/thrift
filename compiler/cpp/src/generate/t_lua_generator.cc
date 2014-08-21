@@ -679,7 +679,7 @@ void t_lua_generator::generate_service_processor(ofstream &out,
   out << endl
     << classname << " = __TObject.new(";
   if (extends_s != NULL) {
-    out << extends_s << "Processor" << endl;
+    out << extends_s->get_name() << "Processor" << endl;
   } else {
     out << "__TProcessor" << endl;
   }
