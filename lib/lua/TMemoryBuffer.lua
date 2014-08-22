@@ -84,8 +84,8 @@ function TMemoryBuffer:readAll(len)
 end
 
 function TMemoryBuffer:write(buf)
-  self.buffer = self.buffer + buf
-  self.wPos = self.wPos + buf
+  self.buffer = self.buffer .. buf
+  self.wPos = self.wPos .. buf
 end
 
 function TMemoryBuffer:flush() end
