@@ -1078,7 +1078,7 @@ void t_lua_generator::generate_serialize_container(ofstream &out,
     indent(out) <<
       "oprot:writeListBegin(" <<
       type_to_enum(((t_list*)ttype)->get_elem_type()) << ", " <<
-      "string.len(" << prefix << "))" << endl;
+      "#(" << prefix << "))" << endl;
   }
 
   // Serialize
