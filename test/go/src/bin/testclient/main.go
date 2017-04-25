@@ -31,7 +31,7 @@ import (
 var host = flag.String("host", "localhost", "Host to connect")
 var port = flag.Int64("port", 9090, "Port number to connect")
 var domain_socket = flag.String("domain-socket", "", "Domain Socket (e.g. /tmp/thrifttest.thrift), instead of host and port")
-var transport = flag.String("transport", "buffered", "Transport: buffered, framed, http")
+var transport = flag.String("transport", "buffered", "Transport: buffered, framed, http, zlib")
 var protocol = flag.String("protocol", "binary", "Protocol: binary, compact, json")
 var ssl = flag.Bool("ssl", false, "Encrypted Transport using SSL")
 var testloops = flag.Int("testloops", 1, "Number of Tests")
@@ -75,6 +75,21 @@ func callEverything(client *thrifttest.ThriftTestClient) {
 		t.Fatalf("Unexpected TestString() result, expected 'thing' got '%s' ", thing)
 	}
 
+	bl, err := client.TestBool(true)
+	if err != nil {
+		t.Fatalf("Unexpected error in TestBool() call: ", err)
+	}
+	if !bl {
+		t.Fatalf("Unexpected TestBool() result expected true, got %f ", bl)
+	}
+	bl, err = client.TestBool(false)
+	if err != nil {
+		t.Fatalf("Unexpected error in TestBool() call: ", err)
+	}
+	if bl {
+		t.Fatalf("Unexpected TestBool() result expected false, got %f ", bl)
+	}
+
 	b, err := client.TestByte(42)
 	if err != nil {
 		t.Fatalf("Unexpected error in TestByte() call: ", err)
@@ -107,6 +122,17 @@ func callEverything(client *thrifttest.ThriftTestClient) {
 		t.Fatalf("Unexpected TestDouble() result expected 42.42, got %f ", d)
 	}
 
+	binout := make([]byte, 256)
+	for i := 0; i < 256; i++ {
+		binout[i] = byte(i)
+	}
+	bin, err := client.TestBinary(binout)
+	for i := 0; i < 256; i++ {
+		if (binout[i] != bin[i]) {
+			t.Fatalf("Unexpected TestBinary() result expected %d, got %d ", binout[i], bin[i])
+		}
+	}
+	
 	xs := thrifttest.NewXtruct()
 	xs.StringThing = "thing"
 	xs.ByteThing = 42
@@ -148,13 +174,20 @@ func callEverything(client *thrifttest.ThriftTestClient) {
 		t.Fatalf("Unexpected TestStringMap() result expected %#v, got %#v ", sm, smret)
 	}
 
-	s := map[int32]bool{1: true, 2: true, 42: true}
+	s := []int32{1, 2, 42}
 	sret, err := client.TestSet(s)
 	if err != nil {
 		t.Fatalf("Unexpected error in TestSet() call: ", err)
 	}
-	if !reflect.DeepEqual(s, sret) {
-		t.Fatalf("Unexpected TestSet() result expected %#v, got %#v ", s, sret)
+	// Sets can be in any order, but Go slices are ordered, so reflect.DeepEqual won't work.
+	stemp := map[int32]struct{}{}
+	for _, val := range s {
+		stemp[val] = struct{}{}
+	}
+	for _, val := range sret {
+		if _, ok := stemp[val]; !ok {
+			t.Fatalf("Unexpected TestSet() result expected %#v, got %#v ", s, sret)
+		}
 	}
 
 	l := []int32{1, 2, 42}
@@ -163,7 +196,7 @@ func callEverything(client *thrifttest.ThriftTestClient) {
 		t.Fatalf("Unexpected error in TestList() call: ", err)
 	}
 	if !reflect.DeepEqual(l, lret) {
-		t.Fatalf("Unexpected TestSet() result expected %#v, got %#v ", l, lret)
+		t.Fatalf("Unexpected TestList() result expected %#v, got %#v ", l, lret)
 	}
 
 	eret, err := client.TestEnum(thrifttest.Numberz_TWO)
@@ -184,10 +217,48 @@ func callEverything(client *thrifttest.ThriftTestClient) {
 
 	mapmap, err := client.TestMapMap(42)
 	if err != nil {
-		t.Fatalf("Unexpected error in TestMapmap() call: ", err)
+		t.Fatalf("Unexpected error in TestMapMap() call: ", err)
 	}
 	if !reflect.DeepEqual(mapmap, rmapmap) {
-		t.Fatalf("Unexpected TestMapmap() result expected %#v, got %#v ", rmapmap, mapmap)
+		t.Fatalf("Unexpected TestMapMap() result expected %#v, got %#v ", rmapmap, mapmap)
+	}
+
+	crazy := thrifttest.NewInsanity()
+	crazy.UserMap = map[thrifttest.Numberz]thrifttest.UserId {
+		thrifttest.Numberz_FIVE: 5,
+		thrifttest.Numberz_EIGHT: 8,
+	}
+	truck1 := thrifttest.NewXtruct()
+	truck1.StringThing = "Goodbye4"
+	truck1.ByteThing = 4;
+	truck1.I32Thing = 4;
+	truck1.I64Thing = 4;
+	truck2 := thrifttest.NewXtruct()
+	truck2.StringThing = "Hello2"
+	truck2.ByteThing = 2;
+	truck2.I32Thing = 2;
+	truck2.I64Thing = 2;
+	crazy.Xtructs = []*thrifttest.Xtruct {
+		truck1,
+		truck2,
+	}
+	insanity, err := client.TestInsanity(crazy)
+	if err != nil {
+		t.Fatalf("Unexpected error in TestInsanity() call: ", err)
+	}
+	if !reflect.DeepEqual(crazy, insanity[1][2]) {
+		t.Fatalf("Unexpected TestInsanity() first result expected %#v, got %#v ",
+		crazy,
+		insanity[1][2])
+	}
+	if !reflect.DeepEqual(crazy, insanity[1][3]) {
+		t.Fatalf("Unexpected TestInsanity() second result expected %#v, got %#v ",
+		crazy,
+		insanity[1][3])
+	}
+	if len(insanity[2][6].UserMap) > 0 || len(insanity[2][6].Xtructs) > 0 {
+		t.Fatalf("Unexpected TestInsanity() non-empty result got %#v ",
+		insanity[2][6])
 	}
 
 	xxsret, err := client.TestMulti(42, 4242, 424242, map[int16]string{1: "blah", 2: "thing"}, thrifttest.Numberz_EIGHT, thrifttest.UserId(24))
@@ -206,10 +277,9 @@ func callEverything(client *thrifttest.ThriftTestClient) {
 		t.Fatalf("Unexpected TestException() result expected %#v, got %#v ", xcept, err)
 	}
 
-	// TODO: connection is being closed on this
 	err = client.TestException("TException")
-	tex, ok := err.(thrift.TApplicationException)
-	if err == nil || !ok || tex.TypeId() != thrift.INTERNAL_ERROR {
+	_, ok := err.(thrift.TApplicationException)
+	if err == nil || !ok {
 		t.Fatalf("Unexpected TestException() result expected ApplicationError, got %#v ", err)
 	}
 

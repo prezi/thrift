@@ -20,12 +20,13 @@
 package common
 
 import (
-	"code.google.com/p/gomock/gomock"
 	"errors"
 	"gen/thrifttest"
 	"reflect"
 	"testing"
 	"thrift"
+
+	"github.com/golang/mock/gomock"
 )
 
 type test_unit struct {
@@ -38,7 +39,7 @@ type test_unit struct {
 }
 
 var units = []test_unit{
-	{"127.0.0.1", 9090, "", "", "binary", false},
+	{"127.0.0.1", 9095, "", "", "binary", false},
 	{"127.0.0.1", 9091, "", "", "compact", false},
 	{"127.0.0.1", 9092, "", "", "binary", true},
 	{"127.0.0.1", 9093, "", "", "compact", true},
@@ -56,11 +57,15 @@ func doUnit(t *testing.T, unit *test_unit) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	handler := NewMockThriftTest(ctrl)
-	server, err := StartServer(unit.host, unit.port, unit.domain_socket, unit.transport, unit.protocol, unit.ssl, handler)
-	if err != nil {
+
+	processor, serverTransport, transportFactory, protocolFactory, err := GetServerParams(unit.host, unit.port, unit.domain_socket, unit.transport, unit.protocol, unit.ssl, "../../../keys", handler)
+
+	server := thrift.NewTSimpleServer4(processor, serverTransport, transportFactory, protocolFactory)
+	if err = server.Listen(); err != nil {
 		t.Errorf("Unable to start server", err)
 		t.FailNow()
 	}
+	go server.AcceptLoop()
 	defer server.Stop()
 	client, err := StartClient(unit.host, unit.port, unit.domain_socket, unit.transport, unit.protocol, unit.ssl)
 	if err != nil {
@@ -89,20 +94,23 @@ func callEverythingWithMock(t *testing.T, client *thrifttest.ThriftTestClient, h
 	gomock.InOrder(
 		handler.EXPECT().TestVoid(),
 		handler.EXPECT().TestString("thing").Return("thing", nil),
+		handler.EXPECT().TestBool(true).Return(true, nil),
+		handler.EXPECT().TestBool(false).Return(false, nil),
 		handler.EXPECT().TestByte(int8(42)).Return(int8(42), nil),
 		handler.EXPECT().TestI32(int32(4242)).Return(int32(4242), nil),
 		handler.EXPECT().TestI64(int64(424242)).Return(int64(424242), nil),
+		// TODO: add TestBinary()
 		handler.EXPECT().TestDouble(float64(42.42)).Return(float64(42.42), nil),
 		handler.EXPECT().TestStruct(&thrifttest.Xtruct{StringThing: "thing", ByteThing: 42, I32Thing: 4242, I64Thing: 424242}).Return(&thrifttest.Xtruct{StringThing: "thing", ByteThing: 42, I32Thing: 4242, I64Thing: 424242}, nil),
 		handler.EXPECT().TestNest(&thrifttest.Xtruct2{StructThing: &thrifttest.Xtruct{StringThing: "thing", ByteThing: 42, I32Thing: 4242, I64Thing: 424242}}).Return(&thrifttest.Xtruct2{StructThing: &thrifttest.Xtruct{StringThing: "thing", ByteThing: 42, I32Thing: 4242, I64Thing: 424242}}, nil),
 		handler.EXPECT().TestMap(map[int32]int32{1: 2, 3: 4, 5: 42}).Return(map[int32]int32{1: 2, 3: 4, 5: 42}, nil),
 		handler.EXPECT().TestStringMap(map[string]string{"a": "2", "b": "blah", "some": "thing"}).Return(map[string]string{"a": "2", "b": "blah", "some": "thing"}, nil),
-		handler.EXPECT().TestSet(map[int32]bool{1: true, 2: true, 42: true}).Return(map[int32]bool{1: true, 2: true, 42: true}, nil),
+		handler.EXPECT().TestSet([]int32{1, 2, 42}).Return([]int32{1, 2, 42}, nil),
 		handler.EXPECT().TestList([]int32{1, 2, 42}).Return([]int32{1, 2, 42}, nil),
 		handler.EXPECT().TestEnum(thrifttest.Numberz_TWO).Return(thrifttest.Numberz_TWO, nil),
 		handler.EXPECT().TestTypedef(thrifttest.UserId(42)).Return(thrifttest.UserId(42), nil),
 		handler.EXPECT().TestMapMap(int32(42)).Return(rmapmap, nil),
-		//not testing insanity
+		// TODO: not testing insanity
 		handler.EXPECT().TestMulti(int8(42), int32(4242), int64(424242), map[int16]string{1: "blah", 2: "thing"}, thrifttest.Numberz_EIGHT, thrifttest.UserId(24)).Return(xxs, nil),
 		handler.EXPECT().TestException("some").Return(xcept),
 		handler.EXPECT().TestException("TException").Return(errors.New("Just random exception")),
@@ -122,6 +130,21 @@ func callEverythingWithMock(t *testing.T, client *thrifttest.ThriftTestClient, h
 	}
 	if thing != "thing" {
 		t.Errorf("Unexpected TestString() result, expected 'thing' got '%s' ", thing)
+	}
+
+	bl, err := client.TestBool(true)
+	if err != nil {
+		t.Errorf("Unexpected error in TestBool() call: ", err)
+	}
+	if !bl {
+		t.Errorf("Unexpected TestBool() result expected true, got %f ", bl)
+	}
+	bl, err = client.TestBool(false)
+	if err != nil {
+		t.Errorf("Unexpected error in TestBool() call: ", err)
+	}
+	if bl {
+		t.Errorf("Unexpected TestBool() result expected false, got %f ", bl)
 	}
 
 	b, err := client.TestByte(42)
@@ -155,6 +178,8 @@ func callEverythingWithMock(t *testing.T, client *thrifttest.ThriftTestClient, h
 	if d != 42.42 {
 		t.Errorf("Unexpected TestDouble() result expected 42.42, got %f ", d)
 	}
+
+	// TODO: add TestBinary() call
 
 	xs := thrifttest.NewXtruct()
 	xs.StringThing = "thing"
@@ -197,13 +222,20 @@ func callEverythingWithMock(t *testing.T, client *thrifttest.ThriftTestClient, h
 		t.Errorf("Unexpected TestStringMap() result expected %#v, got %#v ", sm, smret)
 	}
 
-	s := map[int32]bool{1: true, 2: true, 42: true}
+	s := []int32{1, 2, 42}
 	sret, err := client.TestSet(s)
 	if err != nil {
 		t.Errorf("Unexpected error in TestSet() call: ", err)
 	}
-	if !reflect.DeepEqual(s, sret) {
-		t.Errorf("Unexpected TestSet() result expected %#v, got %#v ", s, sret)
+	// Sets can be in any order, but Go slices are ordered, so reflect.DeepEqual won't work.
+	stemp := map[int32]struct{}{}
+	for _, val := range s {
+		stemp[val] = struct{}{}
+	}
+	for _, val := range sret {
+		if _, ok := stemp[val]; !ok {
+			t.Fatalf("Unexpected TestSet() result expected %#v, got %#v ", s, sret)
+		}
 	}
 
 	l := []int32{1, 2, 42}
@@ -212,7 +244,7 @@ func callEverythingWithMock(t *testing.T, client *thrifttest.ThriftTestClient, h
 		t.Errorf("Unexpected error in TestList() call: ", err)
 	}
 	if !reflect.DeepEqual(l, lret) {
-		t.Errorf("Unexpected TestSet() result expected %#v, got %#v ", l, lret)
+		t.Errorf("Unexpected TestList() result expected %#v, got %#v ", l, lret)
 	}
 
 	eret, err := client.TestEnum(thrifttest.Numberz_TWO)

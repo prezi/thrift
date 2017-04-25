@@ -25,6 +25,7 @@ uses
   Classes, Windows, SysUtils,
   Skiptest.Two,
   Thrift in '..\..\src\Thrift.pas',
+  Thrift.Socket in '..\..\src\Thrift.Socket.pas',
   Thrift.Transport in '..\..\src\Thrift.Transport.pas',
   Thrift.Protocol in '..\..\src\Thrift.Protocol.pas',
   Thrift.Protocol.JSON in '..\..\src\Thrift.Protocol.JSON.pas',
@@ -32,6 +33,7 @@ uses
   Thrift.Server in '..\..\src\Thrift.Server.pas',
   Thrift.Console in '..\..\src\Thrift.Console.pas',
   Thrift.Utils in '..\..\src\Thrift.Utils.pas',
+  Thrift.TypeRegistry in '..\..\src\Thrift.TypeRegistry.pas',
   Thrift.Stream in '..\..\src\Thrift.Stream.pas';
 
 const
@@ -121,7 +123,7 @@ begin
     client := nil;  // not Free!
     cliRef := nil;
     stm.Free;
-    if client = nil then {warning supressed};
+    if client = nil then {warning suppressed};
   end;
 
   DeleteFile( fname+REQUEST_EXT);
@@ -149,7 +151,7 @@ begin
     client := nil;  // not Free!
     cliRef := nil;
     stm.Free;
-    if client = nil then {warning supressed};
+    if client = nil then {warning suppressed};
   end;
 end;
 
@@ -176,7 +178,7 @@ begin
     server := nil;  // not Free!
     stmIn.Free;
     stmOut.Free;
-    if server = nil then {warning supressed};
+    if server = nil then {warning suppressed};
   end;
 
   DeleteFile( fname+RESPONSE_EXT);

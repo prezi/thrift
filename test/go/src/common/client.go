@@ -20,10 +20,12 @@
 package common
 
 import (
+	"compress/zlib"
 	"crypto/tls"
 	"flag"
 	"fmt"
 	"gen/thrifttest"
+	"net/http"
 	"thrift"
 )
 
@@ -74,14 +76,30 @@ func StartClient(
 	}
 	switch transport {
 	case "http":
-		trans, err = thrift.NewTHttpClient(fmt.Sprintf("http://%s/service", hostPort))
+		if ssl {
+			tr := &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+			client := &http.Client{Transport: tr}
+			trans, err = thrift.NewTHttpPostClientWithOptions(fmt.Sprintf("https://%s/", hostPort), thrift.THttpClientOptions{Client: client})
+			fmt.Println(hostPort)
+		} else {
+			trans, err = thrift.NewTHttpPostClient(fmt.Sprintf("http://%s/", hostPort))
+		}
+
 		if err != nil {
 			return nil, err
 		}
+
 	case "framed":
 		trans = thrift.NewTFramedTransport(trans)
 	case "buffered":
 		trans = thrift.NewTBufferedTransport(trans, 8192)
+	case "zlib":
+		trans, err = thrift.NewTZlibTransport(trans, zlib.BestCompression)
+		if err != nil {
+			return nil, err
+		}
 	case "":
 		trans = trans
 	default:

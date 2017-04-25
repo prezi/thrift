@@ -20,6 +20,8 @@
 #ifndef _THRIFT_CXXFUNCTIONAL_H_
 #define _THRIFT_CXXFUNCTIONAL_H_ 1
 
+// clang-format off
+
 /**
  * Loads <functional> from the 'right' location, depending
  * on compiler and whether or not it's using C++03 with TR1
@@ -32,7 +34,7 @@
  * In MSVC 11 all of the implementations live in std, with aliases
  *  in std::tr1 to point to the ones in std.
  */
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
   #define _THRIFT_USING_MICROSOFT_STDLIB 1
 #endif
 
@@ -103,7 +105,11 @@
   }}} // apache::thrift::stdcxx
 
 #elif _THRIFT_USING_GNU_LIBSTDCXX
-  #include <tr1/functional>
+  #ifdef USE_BOOST_THREAD
+    #include <boost/tr1/functional.hpp>
+  #else
+    #include <tr1/functional>
+  #endif
 
   namespace apache { namespace thrift { namespace stdcxx {
     using ::std::tr1::function;

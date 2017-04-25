@@ -22,6 +22,7 @@ package common
 import (
 	"errors"
 	"fmt"
+	"encoding/hex"
 	. "gen/thrifttest"
 	"time"
 )
@@ -44,6 +45,17 @@ func (p *printingHandler) TestVoid() (err error) {
 //  - Thing
 func (p *printingHandler) TestString(thing string) (r string, err error) {
 	fmt.Printf("testString(\"%s\")\n", thing)
+	return thing, nil
+}
+
+// Prints 'testBool("%t")' with thing as 'true' or 'false'
+// @param bool thing - the bool to print
+// @return bool - returns the bool 'thing'
+//
+// Parameters:
+//  - Thing
+func (p *printingHandler) TestBool(thing bool) (r bool, err error) {
+	fmt.Printf("testBool(%t)\n", thing)
 	return thing, nil
 }
 
@@ -91,7 +103,18 @@ func (p *printingHandler) TestDouble(thing float64) (r float64, err error) {
 	return thing, nil
 }
 
-// Prints 'testStruct("{%s}")' where thing has been formatted into a string of comma seperated values
+// Prints 'testBinary("%s")' where '%s' is a hex-formatted string of thing's data
+// @param []byte thing - the binary to print
+// @return []byte - returns the binary 'thing'
+//
+// Parameters:
+//  - Thing
+func (p *printingHandler) TestBinary(thing []byte) (r []byte, err error) {
+	fmt.Printf("testBinary(%s)\n", hex.EncodeToString(thing))
+	return thing, nil
+}
+
+// Prints 'testStruct("{%s}")' where thing has been formatted into a string of comma separated values
 // @param Xtruct thing - the Xtruct to print
 // @return Xtruct - returns the Xtruct 'thing'
 //
@@ -115,7 +138,7 @@ func (p *printingHandler) TestNest(nest *Xtruct2) (r *Xtruct2, err error) {
 }
 
 // Prints 'testMap("{%s")' where thing has been formatted into a string of  'key => value' pairs
-//  seperated by commas and new lines
+//  separated by commas and new lines
 // @param map<i32,i32> thing - the map<i32,i32> to print
 // @return map<i32,i32> - returns the map<i32,i32> 'thing'
 //
@@ -137,7 +160,7 @@ func (p *printingHandler) TestMap(thing map[int32]int32) (r map[int32]int32, err
 }
 
 // Prints 'testStringMap("{%s}")' where thing has been formatted into a string of  'key => value' pairs
-//  seperated by commas and new lines
+//  separated by commas and new lines
 // @param map<string,string> thing - the map<string,string> to print
 // @return map<string,string> - returns the map<string,string> 'thing'
 //
@@ -159,13 +182,13 @@ func (p *printingHandler) TestStringMap(thing map[string]string) (r map[string]s
 }
 
 // Prints 'testSet("{%s}")' where thing has been formatted into a string of  values
-//  seperated by commas and new lines
+//  separated by commas and new lines
 // @param set<i32> thing - the set<i32> to print
 // @return set<i32> - returns the set<i32> 'thing'
 //
 // Parameters:
 //  - Thing
-func (p *printingHandler) TestSet(thing map[int32]bool) (r map[int32]bool, err error) {
+func (p *printingHandler) TestSet(thing []int32) (r []int32, err error) {
 	fmt.Printf("testSet({")
 	first := true
 	for k, _ := range thing {
@@ -181,7 +204,7 @@ func (p *printingHandler) TestSet(thing map[int32]bool) (r map[int32]bool, err e
 }
 
 // Prints 'testList("{%s}")' where thing has been formatted into a string of  values
-//  seperated by commas and new lines
+//  separated by commas and new lines
 // @param list<i32> thing - the list<i32> to print
 // @return list<i32> - returns the list<i32> 'thing'
 //
@@ -251,7 +274,16 @@ func (p *printingHandler) TestMapMap(hello int32) (r map[int32]map[int32]int32, 
 // Parameters:
 //  - Argument
 func (p *printingHandler) TestInsanity(argument *Insanity) (r map[UserId]map[Numberz]*Insanity, err error) {
-	return nil, errors.New("No Insanity")
+	fmt.Printf("testInsanity()\n")
+	r = make(map[UserId]map[Numberz]*Insanity)
+	r[1] = map[Numberz]*Insanity {
+		2: argument,
+		3: argument,
+	}
+	r[2] = map[Numberz]*Insanity {
+		6: NewInsanity(),
+	}
+	return
 }
 
 // Prints 'testMulti()'

@@ -22,9 +22,14 @@ package thrift
 import (
 	"log"
 	"runtime/debug"
+	"sync"
 )
 
-// Simple, non-concurrent server for testing.
+/*
+ * This is not a typical TSimpleServer as it is not blocked after accept a socket.
+ * It is more like a TThreadedServer that can handle different connections in different goroutines.
+ * This will work if golang user implements a conn-pool like thing in client side.
+ */
 type TSimpleServer struct {
 	quit chan struct{}
 
@@ -120,15 +125,14 @@ func (p *TSimpleServer) Listen() error {
 
 func (p *TSimpleServer) AcceptLoop() error {
 	for {
-		select {
-		case <-p.quit:
-			return nil
-		default:
-		}
-
 		client, err := p.serverTransport.Accept()
 		if err != nil {
-			log.Println("Accept err: ", err)
+			select {
+			case <-p.quit:
+				return nil
+			default:
+			}
+			return err
 		}
 		if client != nil {
 			go func() {
@@ -149,9 +153,14 @@ func (p *TSimpleServer) Serve() error {
 	return nil
 }
 
+var once sync.Once
+
 func (p *TSimpleServer) Stop() error {
-	p.quit <- struct{}{}
-	p.serverTransport.Interrupt()
+	q := func() {
+		p.quit <- struct{}{}
+		p.serverTransport.Interrupt()
+	}
+	once.Do(q)
 	return nil
 }
 
@@ -177,10 +186,12 @@ func (p *TSimpleServer) processRequests(client TTransport) error {
 		if err, ok := err.(TTransportException); ok && err.TypeId() == END_OF_FILE {
 			return nil
 		} else if err != nil {
-			log.Printf("error processing request: %s", err)
 			return err
 		}
-		if !ok {
+		if err, ok := err.(TApplicationException); ok && err.TypeId() == UNKNOWN_METHOD {
+			continue
+		}
+ 		if !ok {
 			break
 		}
 	}

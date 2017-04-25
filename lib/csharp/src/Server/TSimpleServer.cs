@@ -61,10 +61,24 @@ namespace Thrift.Server
     }
 
     public TSimpleServer(TProcessor processor,
+        TServerTransport serverTransport,
+        TTransportFactory transportFactory,
+        TProtocolFactory protocolFactory)
+        : base(processor,
+           serverTransport,
+           transportFactory,
+           transportFactory,
+           protocolFactory,
+           protocolFactory,
+           DefaultLogDelegate)
+    {
+    }
+
+    public TSimpleServer(TProcessorFactory processorFactory,
               TServerTransport serverTransport,
               TTransportFactory transportFactory,
               TProtocolFactory protocolFactory)
-      : base(processor,
+      : base(processorFactory,
          serverTransport,
          transportFactory,
          transportFactory,
@@ -92,6 +106,7 @@ namespace Thrift.Server
 
       while (!stop)
       {
+        TProcessor processor = null;
         TTransport client = null;
         TTransport inputTransport = null;
         TTransport outputTransport = null;
@@ -102,6 +117,7 @@ namespace Thrift.Server
         {
           using (client = serverTransport.Accept())
           {
+            processor = processorFactory.GetProcessor(client);
             if (client != null)
             {
               using (inputTransport = inputTransportFactory.GetTransport(client))
@@ -116,8 +132,11 @@ namespace Thrift.Server
                     connectionContext = serverEventHandler.createContext(inputProtocol, outputProtocol);
 
                   //Process client requests until client disconnects
-                  while (true)
+                  while (!stop)
                   {
+                    if (!inputTransport.Peek())
+                      break;
+
                     //Fire processContext server event
                     //N.B. This is the pattern implemented in C++ and the event fires provisionally.
                     //That is to say it may be many minutes between the event firing and the client request
@@ -133,9 +152,12 @@ namespace Thrift.Server
             }
           }
         }
-        catch (TTransportException)
+        catch (TTransportException ttx)
         {
-          //Usually a client disconnect, expected
+          if (!stop || ttx.Type != TTransportException.ExceptionType.Interrupted)
+          {
+            logDelegate(ttx.ToString());
+          }
         }
         catch (Exception x)
         {

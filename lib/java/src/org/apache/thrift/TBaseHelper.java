@@ -28,6 +28,7 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.Collection;
 
 public final class TBaseHelper {
 
@@ -221,6 +222,25 @@ public final class TBaseHelper {
     }
   }
 
+  public static void toString(Collection<ByteBuffer> bbs, StringBuilder sb) {
+    Iterator<ByteBuffer> it = bbs.iterator();
+    if (!it.hasNext()) {
+      sb.append("[]");
+    } else {
+      sb.append("[");
+      while (true) {
+        ByteBuffer bb = it.next();
+        org.apache.thrift.TBaseHelper.toString(bb, sb);
+        if (!it.hasNext()) {
+          sb.append("]");
+          return;
+        } else {
+          sb.append(", ");
+        }
+      }
+    }
+  }
+
   public static void toString(ByteBuffer bb, StringBuilder sb) {
     byte[] buf = bb.array();
 
@@ -303,5 +323,15 @@ public final class TBaseHelper {
     byte[] copy = new byte[orig.length];
     System.arraycopy(orig, 0, copy, 0, orig.length);
     return copy;
+  }
+
+  public static int hashCode(long value) {
+    int low = (int) value;
+    int high = (int) (value >>> 32);
+    return high * 127 + low;
+  }
+
+  public static int hashCode(double value) {
+    return hashCode(Double.doubleToRawLongBits(value));
   }
 }

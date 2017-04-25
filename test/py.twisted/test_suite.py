@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements. See the NOTICE file
@@ -17,9 +19,13 @@
 # under the License.
 #
 
-import sys, glob, time
-sys.path.insert(0, './gen-py.twisted')
-sys.path.insert(0, glob.glob('../../lib/py/build/lib.*')[0])
+import sys
+import os
+import glob
+import time
+basepath = os.path.abspath(os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(basepath, 'gen-py.twisted'))
+sys.path.insert(0, glob.glob(os.path.join(basepath, '../../lib/py/build/lib.*'))[0])
 
 from ThriftTest import ThriftTest
 from ThriftTest.ttypes import Xception, Xtruct
@@ -31,6 +37,7 @@ from twisted.internet import defer, reactor
 from twisted.internet.protocol import ClientCreator
 
 from zope.interface import implements
+
 
 class TestHandler:
     implements(ThriftTest.Iface)
@@ -58,6 +65,9 @@ class TestHandler:
 
     def testDouble(self, dub):
         return dub
+
+    def testBinary(self, thing):
+        return thing
 
     def testStruct(self, thing):
         return thing
@@ -94,6 +104,7 @@ class TestHandler:
     def testTypedef(self, thing):
         return thing
 
+
 class ThriftTestCase(unittest.TestCase):
 
     @defer.inlineCallbacks
@@ -102,16 +113,15 @@ class ThriftTestCase(unittest.TestCase):
         self.processor = ThriftTest.Processor(self.handler)
         self.pfactory = TBinaryProtocol.TBinaryProtocolFactory()
 
-        self.server = reactor.listenTCP(0,
-            TTwisted.ThriftServerFactory(self.processor,
-            self.pfactory), interface="127.0.0.1")
+        self.server = reactor.listenTCP(
+            0, TTwisted.ThriftServerFactory(self.processor, self.pfactory), interface="127.0.0.1")
 
         self.portNo = self.server.getHost().port
 
         self.txclient = yield ClientCreator(reactor,
-            TTwisted.ThriftClientProtocol,
-            ThriftTest.Client,
-            self.pfactory).connectTCP("127.0.0.1", self.portNo)
+                                            TTwisted.ThriftClientProtocol,
+                                            ThriftTest.Client,
+                                            self.pfactory).connectTCP("127.0.0.1", self.portNo)
         self.client = self.txclient.client
 
     @defer.inlineCallbacks
@@ -144,6 +154,8 @@ class ThriftTestCase(unittest.TestCase):
     def testDouble(self):
         self.assertEquals((yield self.client.testDouble(-5.235098235)), -5.235098235)
 
+    # TODO: def testBinary(self) ...
+
     @defer.inlineCallbacks
     def testStruct(self):
         x = Xtruct()
@@ -164,14 +176,14 @@ class ThriftTestCase(unittest.TestCase):
         try:
             yield self.client.testException('Xception')
             self.fail("should have gotten exception")
-        except Xception, x:
+        except Xception as x:
             self.assertEquals(x.errorCode, 1001)
             self.assertEquals(x.message, 'Xception')
 
         try:
             yield self.client.testException("throw_undeclared")
             self.fail("should have thrown exception")
-        except Exception: # type is undefined
+        except Exception:  # type is undefined
             pass
 
     @defer.inlineCallbacks

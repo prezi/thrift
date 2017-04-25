@@ -96,6 +96,9 @@ func (p *TServerSocket) Open() error {
 }
 
 func (p *TServerSocket) Addr() net.Addr {
+	if p.listener != nil {
+		return p.listener.Addr()
+	}
 	return p.addr
 }
 
@@ -112,6 +115,7 @@ func (p *TServerSocket) Close() error {
 func (p *TServerSocket) Interrupt() error {
 	p.mu.Lock()
 	p.interrupted = true
+	p.Close()
 	p.mu.Unlock()
 
 	return nil

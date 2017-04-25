@@ -22,7 +22,7 @@ import logging
 import socket
 import struct
 
-from thrift.transport.TTransport import TTransportException, TTransportBase, TMemoryBuffer
+from .transport.TTransport import TTransportException, TTransportBase, TMemoryBuffer
 
 from io import BytesIO
 from collections import deque
@@ -30,6 +30,8 @@ from contextlib import contextmanager
 from tornado import gen, iostream, ioloop, tcpserver, concurrent
 
 __all__ = ['TTornadoServer', 'TTornadoStreamTransport']
+
+logger = logging.getLogger(__name__)
 
 
 class _Lock(object):
@@ -79,7 +81,7 @@ class TTornadoStreamTransport(TTransportBase):
 
     @gen.coroutine
     def open(self, timeout=None):
-        logging.debug('socket connecting')
+        logger.debug('socket connecting')
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         self.stream = iostream.IOStream(sock)
 
@@ -135,9 +137,7 @@ class TTornadoStreamTransport(TTransportBase):
                 if len(frame_header) == 0:
                     raise iostream.StreamClosedError('Read zero bytes from stream')
                 frame_length, = struct.unpack('!i', frame_header)
-                logging.debug('received frame header, frame length = %d', frame_length)
                 frame = yield self.stream.read_bytes(frame_length)
-                logging.debug('received frame payload: %r', frame)
                 raise gen.Return(frame)
 
     def write(self, buf):
@@ -164,19 +164,25 @@ class TTornadoServer(tcpserver.TCPServer):
 
     @gen.coroutine
     def handle_stream(self, stream, address):
-        host, port = address
+        host, port = address[:2]
         trans = TTornadoStreamTransport(host=host, port=port, stream=stream,
                                         io_loop=self.io_loop)
         oprot = self._oprot_factory.getProtocol(trans)
 
         try:
             while not trans.stream.closed():
-                frame = yield trans.readFrame()
+                try:
+                    frame = yield trans.readFrame()
+                except TTransportException as e:
+                    if e.type == TTransportException.END_OF_FILE:
+                        break
+                    else:
+                        raise
                 tr = TMemoryBuffer(frame)
                 iprot = self._iprot_factory.getProtocol(tr)
                 yield self._processor.process(iprot, oprot)
         except Exception:
-            logging.exception('thrift exception in handle_stream')
+            logger.exception('thrift exception in handle_stream')
             trans.close()
 
-        logging.info('client disconnected %s:%d', host, port)
+        logger.info('client disconnected %s:%d', host, port)

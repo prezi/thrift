@@ -37,9 +37,6 @@ enum _ThriftSocketProperties
   PROP_THRIFT_SOCKET_PORT
 };
 
-/* for errors coming from socket() and connect() */
-extern int errno;
-
 G_DEFINE_TYPE(ThriftSocket, thrift_socket, THRIFT_TYPE_TRANSPORT)
 
 /* implements thrift_transport_is_open */
@@ -48,6 +45,54 @@ thrift_socket_is_open (ThriftTransport *transport)
 {
   ThriftSocket *socket = THRIFT_SOCKET (transport);
   return socket->sd != THRIFT_INVALID_SOCKET;
+}
+
+/* overrides thrift_transport_peek */
+gboolean
+thrift_socket_peek (ThriftTransport *transport, GError **error)
+{
+  gboolean result = FALSE;
+  guint8 buf;
+  int r;
+  int errno_copy;
+
+  ThriftSocket *socket = THRIFT_SOCKET (transport);
+
+  if (thrift_socket_is_open (transport))
+  {
+    r = recv (socket->sd, &buf, 1, MSG_PEEK);
+    if (r == -1)
+    {
+      errno_copy = errno;
+
+      #if defined __FreeBSD__ || defined __MACH__
+      /* FreeBSD returns -1 and ECONNRESET if the socket was closed by the other
+         side */
+      if (errno_copy == ECONNRESET)
+      {
+        thrift_socket_close (transport, error);
+      }
+      else
+      {
+      #endif
+
+      g_set_error (error,
+                   THRIFT_TRANSPORT_ERROR,
+                   THRIFT_TRANSPORT_ERROR_SOCKET,
+                   "failed to peek at socket - %s",
+                   strerror (errno_copy));
+
+      #if defined __FreeBSD__ || defined __MACH__
+      }
+      #endif
+    }
+    else if (r > 0)
+    {
+      result = TRUE;
+    }
+  }
+
+  return result;
 }
 
 /* implements thrift_transport_open */
@@ -84,7 +129,7 @@ thrift_socket_open (ThriftTransport *transport, GError **error)
   memset (&pin, 0, sizeof(pin));
   pin.sin_family = AF_INET;
   pin.sin_addr.s_addr = ((struct in_addr *) (hp->h_addr))->s_addr;
-  pin.sin_port = htons (tsocket->port); 
+  pin.sin_port = htons (tsocket->port);
 
   /* create the socket */
   if ((tsocket->sd = socket (AF_INET, SOCK_STREAM, 0)) == -1)
@@ -138,7 +183,7 @@ thrift_socket_read (ThriftTransport *transport, gpointer buf,
 
   while (got < len)
   {
-    ret = recv (socket->sd, buf+got, len-got, 0);
+    ret = recv (socket->sd, (guint8 *)buf + got, len-got, 0);
     if (ret <= 0)
     {
       g_set_error (error, THRIFT_TRANSPORT_ERROR,
@@ -165,7 +210,7 @@ thrift_socket_read_end (ThriftTransport *transport, GError **error)
 
 /* implements thrift_transport_write */
 gboolean
-thrift_socket_write (ThriftTransport *transport, const gpointer buf,     
+thrift_socket_write (ThriftTransport *transport, const gpointer buf,
                      const guint32 len, GError **error)
 {
   gint ret = 0;
@@ -176,7 +221,7 @@ thrift_socket_write (ThriftTransport *transport, const gpointer buf,
 
   while (sent < len)
   {
-    ret = send (socket->sd, buf + sent, len - sent, 0);
+    ret = send (socket->sd, (guint8 *)buf + sent, len - sent, 0);
     if (ret < 0)
     {
       g_set_error (error, THRIFT_TRANSPORT_ERROR,
@@ -243,8 +288,9 @@ void
 thrift_socket_get_property (GObject *object, guint property_id,
                             GValue *value, GParamSpec *pspec)
 {
-  THRIFT_UNUSED_VAR (pspec);
   ThriftSocket *socket = THRIFT_SOCKET (object);
+
+  THRIFT_UNUSED_VAR (pspec);
 
   switch (property_id)
   {
@@ -262,12 +308,16 @@ void
 thrift_socket_set_property (GObject *object, guint property_id,
                             const GValue *value, GParamSpec *pspec)
 {
-  THRIFT_UNUSED_VAR (pspec);
   ThriftSocket *socket = THRIFT_SOCKET (object);
+
+  THRIFT_UNUSED_VAR (pspec);
 
   switch (property_id)
   {
     case PROP_THRIFT_SOCKET_HOSTNAME:
+      if (socket->hostname) {
+        g_free(socket->hostname);
+      }
       socket->hostname = g_strdup (g_value_get_string (value));
       break;
     case PROP_THRIFT_SOCKET_PORT:
@@ -280,6 +330,7 @@ thrift_socket_set_property (GObject *object, guint property_id,
 static void
 thrift_socket_class_init (ThriftSocketClass *cls)
 {
+  ThriftTransportClass *ttc = THRIFT_TRANSPORT_CLASS (cls);
   GObjectClass *gobject_class = G_OBJECT_CLASS (cls);
   GParamSpec *param_spec = NULL;
 
@@ -299,18 +350,17 @@ thrift_socket_class_init (ThriftSocketClass *cls)
   param_spec = g_param_spec_uint ("port",
                                   "port (construct)",
                                   "Set the port of the remote host",
-                                  0, /* min */
-                                  65534, /* max */
+                                  0u, /* min */
+                                  65535u, /* max */
                                   9090, /* default by convention */
                                   G_PARAM_CONSTRUCT_ONLY |
                                   G_PARAM_READWRITE);
   g_object_class_install_property (gobject_class, PROP_THRIFT_SOCKET_PORT,
                                    param_spec);
 
-  ThriftTransportClass *ttc = THRIFT_TRANSPORT_CLASS (cls);
-
   gobject_class->finalize = thrift_socket_finalize;
   ttc->is_open = thrift_socket_is_open;
+  ttc->peek = thrift_socket_peek;
   ttc->open = thrift_socket_open;
   ttc->close = thrift_socket_close;
   ttc->read = thrift_socket_read;

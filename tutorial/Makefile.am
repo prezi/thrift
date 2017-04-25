@@ -31,6 +31,10 @@ if WITH_CPP
 SUBDIRS += cpp
 endif
 
+if WITH_D
+SUBDIRS += d
+endif
+
 if WITH_JAVA
 SUBDIRS += java
 SUBDIRS += js
@@ -50,6 +54,14 @@ if WITH_HASKELL
 SUBDIRS += hs
 endif
 
+if WITH_HAXE
+SUBDIRS += haxe
+endif
+
+if WITH_DOTNETCORE
+SUBDIRS += netcore
+endif
+
 if WITH_GO
 SUBDIRS += go
 endif
@@ -58,11 +70,23 @@ if WITH_NODEJS
 SUBDIRS += nodejs
 endif
 
+if WITH_DART
+SUBDIRS += dart
+endif
+
+if WITH_RS
+SUBDIRS += rs
+endif
+
 #
 # generate html for ThriftTest.thrift
 #
 all-local:
 	$(top_builddir)/compiler/cpp/thrift --gen html -r $(top_srcdir)/tutorial/tutorial.thrift
+
+clean-local:
+	rm -rf $(top_srcdir)/tutorial/gen-html
+
 endif
 
 # Any folders or files not listed above being added to SUBDIR need to be placed here in

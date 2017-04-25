@@ -37,6 +37,10 @@ func (p *simpleHandler) TestString(thing string) (r string, err error) {
 	return thing, nil
 }
 
+func (p *simpleHandler) TestBool(thing []byte) (r []byte, err error) {
+	return thing, nil
+}
+
 func (p *simpleHandler) TestByte(thing int8) (r int8, err error) {
 	return thing, nil
 }
@@ -50,6 +54,10 @@ func (p *simpleHandler) TestI64(thing int64) (r int64, err error) {
 }
 
 func (p *simpleHandler) TestDouble(thing float64) (r float64, err error) {
+	return thing, nil
+}
+
+func (p *simpleHandler) TestBinary(thing []byte) (r []byte, err error) {
 	return thing, nil
 }
 
@@ -69,7 +77,7 @@ func (p *simpleHandler) TestStringMap(thing map[string]string) (r map[string]str
 	return thing, nil
 }
 
-func (p *simpleHandler) TestSet(thing map[int32]bool) (r map[int32]bool, err error) {
+func (p *simpleHandler) TestSet(thing []int32) (r []int32, err error) {
 	return thing, nil
 }
 

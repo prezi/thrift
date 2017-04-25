@@ -51,8 +51,13 @@ G_DEFINE_TYPE(TestProcessor, test_processor, THRIFT_TYPE_PROCESSOR)
 
 gboolean
 test_processor_process (ThriftProcessor *processor, ThriftProtocol *in,
-                        ThriftProtocol *out)
+                        ThriftProtocol *out, GError **error)
 {
+  THRIFT_UNUSED_VAR (processor);
+  THRIFT_UNUSED_VAR (in);
+  THRIFT_UNUSED_VAR (out);
+  THRIFT_UNUSED_VAR (error);
+
   return FALSE;
 }
 
@@ -88,7 +93,8 @@ test_server (void)
 
   if (pid == 0)
   {
-    THRIFT_SERVER_GET_CLASS (THRIFT_SERVER (ss))->serve (THRIFT_SERVER (ss));
+    THRIFT_SERVER_GET_CLASS (THRIFT_SERVER (ss))->serve (THRIFT_SERVER (ss),
+                                                         NULL);
     exit (0);
   } else {
     sleep (5);
@@ -105,7 +111,10 @@ test_server (void)
 int
 main(int argc, char *argv[])
 {
+#if (!GLIB_CHECK_VERSION (2, 36, 0))
   g_type_init();
+#endif
+
   g_test_init (&argc, &argv, NULL);
 
   g_test_add_func ("/testsimpleserver/SimpleServer", test_server);
